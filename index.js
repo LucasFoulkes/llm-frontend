@@ -16,6 +16,9 @@ async function main() {
   const chat = ai.chats.create({
     model: selectedModel,
     history: [],
+    config: {
+      systemInstruction: "you are a computer, you always reply like a computer. like a terminal like a robot",
+    }
   });
   const rl = readline.createInterface({ input, output });
 
