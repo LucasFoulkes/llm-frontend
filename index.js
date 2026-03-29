@@ -8,27 +8,25 @@ const { stdin: input, stdout: output } = require("node:process");
 dotenv.config({ path: path.join(__dirname, ".env") });
 
 const apiKey = process.env.GEMINI_API_KEY;
+const selectedModel = models[1];
 
 const ai = new GoogleGenAI({ apiKey });
 
 async function main() {
+  const chat = ai.chats.create({
+    model: selectedModel,
+    history: [],
+  });
   const rl = readline.createInterface({ input, output });
 
   while (true) {
     const contents = await rl.question("> ");
 
-    if (contents.toLowerCase() === "exit" || contents.toLowerCase() === "quit") {
-      break;
-    }
-
     if (!contents.trim()) {
       continue;
     }
 
-    const response = await ai.models.generateContentStream({
-      model: models[1],
-      contents,
-    });
+    const response = await chat.sendMessageStream({ message: contents });
 
     for await (const chunk of response) {
       process.stdout.write(chunk.text || "");
