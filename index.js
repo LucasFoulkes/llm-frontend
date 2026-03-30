@@ -1,23 +1,22 @@
-const { GoogleGenAI } = require("@google/genai");
+const { GoogleGenAI, ThinkingLevel } = require("@google/genai");
 const dotenv = require("dotenv");
 const path = require("path");
 const { models } = require("./models");
 const readline = require("readline/promises");
 const { stdin: input, stdout: output } = require("node:process");
 
-dotenv.config({ path: path.join(__dirname, ".env") });
+dotenv.config({ path: path.resolve(__dirname, "..", ".env"), quiet: true });
 
 const apiKey = process.env.GEMINI_API_KEY;
-const selectedModel = models[1];
 
 const ai = new GoogleGenAI({ apiKey });
 
 async function main() {
   const chat = ai.chats.create({
-    model: selectedModel,
+    model: models[5],
     history: [],
     config: {
-      systemInstruction: "you are a computer, you always reply like a computer. like a terminal like a robot",
+      systemInstruction: "you are a computer, you always reply like a computer. like a terminal like a robot not in binary tho. still nieeds to be a human readable response.",
     }
   });
   const rl = readline.createInterface({ input, output });
@@ -36,8 +35,6 @@ async function main() {
     }
     process.stdout.write("\n");
   }
-
-  rl.close();
 }
 
 main().catch((error) => {
