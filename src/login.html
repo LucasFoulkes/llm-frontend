@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>login</title>
+  <link rel="stylesheet" href="/style.css">
+  <script>if (localStorage.getItem('token')) window.location.href = '/chat';</script>
+
+<body>
+
+  <div id="login" x-data="{ usuario: '', contrasena: '', error: '' }" >
+    <form @submit.prevent="
+      error = '';
+      if (!usuario.trim() || !contrasena) { error = 'ambos campos requeridos'; return; }
+      try {
+        const res = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ usuario: usuario.trim(), contrasena }),
+        });
+        const data = await res.json();
+        if (data.ok && data.data) {
+          localStorage.setItem('token', data.data.token);
+          localStorage.setItem('profile', JSON.stringify(data.data.profile));
+          localStorage.setItem('operations', JSON.stringify(data.data.operations));
+          window.location.href = '/chat';
+        } else {
+          error = data.error || 'login failed';
+        }
+      } catch (e) { error = e.message; }
+    ">
+      <input x-model="usuario" placeholder="usuario (cedula)" autofocus>
+      <input x-model="contrasena" type="password" placeholder="contrasena">
+      <button type="submit">entrar</button>
+      <div class="error" x-show="error" x-text="error"></div>
+    </form>
+  </div>
+
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>gemini</title>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <link rel="stylesheet" href="/style.css">
+  <script>if (!localStorage.getItem('token')) window.location.href = '/';</script>
+
+<body>
+
+  <div id="chat" x-data="chat()"
+    x-init="$watch('messages', () => $nextTick(() => { $refs.msgs.scrollTop = $refs.msgs.scrollHeight; $refs.respPane.scrollTop = $refs.respPane.scrollHeight }))">
+    <div id="sidebar">
+      <div class="sidebar-btn" x-ref="menubtn" @click="menuOpen = !menuOpen">
+        <div class="avatar" x-text="initials"></div>
+      </div>
+    </div>
+    <div class="dropdown" x-show="menuOpen" x-cloak @click.away="menuOpen = false"
+      :style="`left:49px;top:${($refs.menubtn?.getBoundingClientRect().top || 0)}px`">
+      <div class="dropdown-item" @click="localStorage.removeItem('token'); localStorage.removeItem('profile'); localStorage.removeItem('operations'); window.location.href = '/'">logout</div>
+      <div class="dropdown-item" @click="showHistory = !showHistory; menuOpen = false" x-text="showHistory ? 'hide history' : 'show history'"></div>
+    </div>
+    <div id="main">
+      <div id="panes">
+        <div id="pane-responses" x-ref="respPane">
+          <div class="nav-arrows">
+            <template x-if="responseIdx > 0">
+              <button class="nav-btn" @click="responseIdx--">&lt;</button>
+            </template>
+            <template x-if="responseIdx < responses.length - 1">
+              <button class="nav-btn" @click="responseIdx++"
+                @mousedown="navTimer = setTimeout(() => { responseIdx = responses.length - 1 }, 500)"
+                @mouseup="clearTimeout(navTimer)"
+                @mouseleave="clearTimeout(navTimer)">&gt;</button>
+            </template>
+          </div>
+          <template x-if="responses.length > 0">
+            <div class="msg text" x-html="render(responses[responseIdx])"></div>
+          </template>
+        </div>
+        <div id="pane-history" x-ref="msgs" x-show="showHistory">
+          <button class="copy-btn" @click="navigator.clipboard.writeText(messages.map(m => m.content).join('\n\n'))">copy</button>
+          <template x-for="msg in messages">
+            <div class="msg" :class="msg.type" x-html="msg.type === 'text' ? render(msg.content) : msg.content"></div>
+          </template>
+        </div>
+      </div>
+      <div id="input-row">
+        <span id="prompt">&gt;</span>
+        <input id="input" x-ref="input" x-model="input" :readonly="loading" @keydown.enter="send()" autofocus>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function chat() {
+      return {
+        messages: [{ type: "user", content: `Context:\n${JSON.stringify({ token: localStorage.getItem('token'), profile: JSON.parse(localStorage.getItem('profile')), operations: JSON.parse(localStorage.getItem('operations')) })}` }],
+        history: [{ role: "user", content: `Context:\n${JSON.stringify({ token: localStorage.getItem('token'), profile: JSON.parse(localStorage.getItem('profile')), operations: JSON.parse(localStorage.getItem('operations')) })}` }],
+        input: "",
+        loading: false,
+        showHistory: true,
+        responses: [],
+        responseIdx: 0,
+        navTimer: null,
+        menuOpen: false,
+        initials: (() => {
+          try {
+            const p = JSON.parse(localStorage.getItem('profile'));
+            return (p.nombres[0] + p.apellidos[0]).toUpperCase();
+          } catch { return '??'; }
+        })(),
+
+        async send() {
+          const message = this.input.trim();
+          if (!message || this.loading) return;
+          this.input = "";
+          this.loading = true;
+
+          this.messages.push({ type: "user", content: message });
+          this.history.push({ role: "user", content: message });
+
+          let textIdx = null;
+          let reasoningIdx = null;
+          let responseText = "";
+
+          try {
+            const res = await fetch("/interaction", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ messages: this.history }),
+            });
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+            let buf = "";
+
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              buf += decoder.decode(value, { stream: true });
+              const lines = buf.split("\n");
+              buf = lines.pop();
+              for (const line of lines) {
+                if (!line.startsWith("data: ")) continue;
+                const event = JSON.parse(line.slice(6));
+                if (event.type === "reasoning") {
+                  if (reasoningIdx === null) {
+                    this.messages.push({ type: "reasoning", content: "[thinking] " });
+                    reasoningIdx = this.messages.length - 1;
+                  }
+                  this.messages[reasoningIdx].content += event.text;
+                } else if (event.type === "text") {
+                  reasoningIdx = null;
+                  if (textIdx === null) {
+                    this.messages.push({ type: "text", content: "" });
+                    textIdx = this.messages.length - 1;
+                  }
+                  this.messages[textIdx].content += event.text;
+                  responseText += event.text;
+                  if (responseText === event.text) {
+                    this.responses.push(responseText);
+                    this.responseIdx = this.responses.length - 1;
+                  } else {
+                    this.responses.splice(this.responses.length - 1, 1, responseText);
+                  }
+                } else if (event.type === "tool_call") {
+                  textIdx = null; reasoningIdx = null;
+                  this.messages.push({ type: "tool_call", content: "[tool] " + event.name + "(" + JSON.stringify(event.args) + ")" });
+                } else if (event.type === "tool_result") {
+                  this.messages.push({ type: "tool_result", content: "[result] " + event.result });
+                } else if (event.type === "error") {
+                  textIdx = null; reasoningIdx = null;
+                  this.messages.push({ type: "error", content: "[error] " + event.error });
+                }
+              }
+            }
+          } catch (err) {
+            this.messages.push({ type: "error", content: err.message });
+          }
+          if (responseText) this.history.push({ role: "assistant", content: responseText });
+          this.loading = false;
+        },
+
+        render(text) {
+          return marked.parse(text);
+        },
+      };
+    }
+  </script>
+</body>
+
+</html>

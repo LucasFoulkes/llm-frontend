@@ -2,28 +2,26 @@
   "name": "js-server",
   "version": "1.0.0",
   "description": "",
-  "type": "commonjs",
-  "main": "index.js",
+  "type": "module",
+  "main": "src/agent.js",
   "scripts": {
-    "start": "node index.js",
+    "cli": "node experiments/cli.js",
+    "server": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@google/genai": "^1.47.0",
-    "better-sqlite3": "^12.8.0",
-    "chalk": "^5.6.2",
+    "@ai-sdk/google": "^3.0.59",
+    "@hono/node-server": "^1.19.13",
+    "ai": "^6.0.149",
     "dotenv": "^17.3.1",
-    "kleur": "^4.1.5",
-    "node-pty": "^1.1.0",
-    "sql.js": "^1.14.1",
-    "sqlite3": "^6.0.1"
+    "hono": "^4.12.12",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.13",
-    "@types/node": "^25.5.0",
-    "tsx": "^4.21.0",
-    "typescript": "^6.0.2"
+    "nodemon": "^3.1.14"
   }
 }
