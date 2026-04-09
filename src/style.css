@@ -119,11 +119,13 @@ table {
   position: relative;
 }
 
-#pane-responses {
+#pane-responses,
+#pane-history {
   padding: 0;
 }
 
-#pane-responses .msg {
+#pane-responses .msg,
+#pane-history .msg {
   padding: 1rem;
 }
 
@@ -152,9 +154,10 @@ table {
 }
 
 .copy-btn {
-  position: absolute;
+  position: sticky;
   top: 0;
-  right: 0;
+  float: right;
+  z-index: 1;
   background: #fff;
   border: none;
   border-left: 1px solid #000;

@@ -10,6 +10,19 @@ app.get("/", serveStatic({ root: "./src", path: "login.html" }));
 app.get("/chat", serveStatic({ root: "./src", path: "index.html" }));
 app.use("/*", serveStatic({ root: "./src" }));
 
+app.get("/downloads/*", async (c) => {
+  const path = c.req.path;
+  const res = await fetch(`http://localhost:3001${path}`);
+  if (!res.ok) return c.text("not found", 404);
+  const filename = path.split("/").pop();
+  return new Response(res.body, {
+    headers: {
+      "Content-Type": res.headers.get("Content-Type") || "application/octet-stream",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+    },
+  });
+});
+
 app.post("/api/login", async (c) => {
   const body = await c.req.json();
   const res = await fetch("http://localhost:3001/api/login", {
