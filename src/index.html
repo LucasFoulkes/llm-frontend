@@ -13,7 +13,7 @@
 <body>
 
   <div id="chat" x-data="chat()"
-    x-init="$watch('messages', () => $nextTick(() => { $refs.msgs.scrollTop = $refs.msgs.scrollHeight; $refs.respPane.scrollTop = $refs.respPane.scrollHeight }))">
+    x-init="$watch('messages', () => $nextTick(() => { $refs.msgs.scrollTop = $refs.msgs.scrollHeight; $refs.respPane.scrollTop = $refs.respPane.scrollHeight })); $watch('showLoader', v => v ? startSpinner() : stopSpinner())">
     <div id="sidebar">
       <div class="sidebar-btn" x-ref="menubtn" @click="menuOpen = !menuOpen">
         <div class="avatar" x-text="initials"></div>
@@ -41,6 +41,12 @@
           <template x-if="responses.length > 0">
             <div class="msg text" x-html="render(responses[responseIdx])"></div>
           </template>
+          <template x-if="showLoader">
+            <div class="loading-dots gol">
+              <pre class="gol-grid" x-text="golRender()"></pre>
+              <em x-show="status" x-text="status"></em>
+            </div>
+          </template>
         </div>
         <div id="pane-history" x-ref="msgs" x-show="showHistory">
           <button class="copy-btn" @click="navigator.clipboard.writeText(messages.map(m => m.content).join('\n\n'))">copy</button>
@@ -63,6 +69,72 @@
         history: [{ role: "user", content: `Context:\n${JSON.stringify({ token: localStorage.getItem('token'), profile: JSON.parse(localStorage.getItem('profile')), operations: JSON.parse(localStorage.getItem('operations')) })}` }],
         input: "",
         loading: false,
+        showLoader: false,
+        status: "",
+        golSize: 14,
+        golGrid: [],
+        golTickCount: 0,
+        golInterval: null,
+        golSeed() {
+          const n = this.golSize;
+          const g = [];
+          for (let r = 0; r < n; r++) {
+            const row = [];
+            for (let c = 0; c < n; c++) row.push(Math.random() < 0.35 ? 1 : 0);
+            g.push(row);
+          }
+          this.golGrid = g;
+          this.golTickCount = 0;
+        },
+        golTick() {
+          const n = this.golSize;
+          const g = this.golGrid;
+          const next = [];
+          for (let r = 0; r < n; r++) {
+            const row = [];
+            for (let c = 0; c < n; c++) {
+              let live = 0;
+              for (let dr = -1; dr <= 1; dr++) {
+                for (let dc = -1; dc <= 1; dc++) {
+                  if (dr === 0 && dc === 0) continue;
+                  live += g[(r + dr + n) % n][(c + dc + n) % n];
+                }
+              }
+              const cell = g[r][c];
+              row.push(cell ? (live === 2 || live === 3 ? 1 : 0) : (live === 3 ? 1 : 0));
+            }
+            next.push(row);
+          }
+          this.golGrid = next;
+          this.golTickCount++;
+          if (this.golTickCount >= 80) this.golSeed();
+        },
+        golRender() {
+          const n = this.golSize;
+          const g = this.golGrid;
+          const lines = [];
+          for (let r = 0; r < n; r += 2) {
+            let line = '';
+            for (let c = 0; c < n; c++) {
+              const top = g[r][c];
+              const bot = (r + 1 < n) ? g[r + 1][c] : 0;
+              line += top && bot ? '█' : top ? '▀' : bot ? '▄' : ' ';
+            }
+            lines.push(line);
+          }
+          return lines.join('\n');
+        },
+        startSpinner() {
+          if (this.golInterval) return;
+          this.golSeed();
+          this.golInterval = setInterval(() => this.golTick(), 150);
+        },
+        stopSpinner() {
+          if (this.golInterval) {
+            clearInterval(this.golInterval);
+            this.golInterval = null;
+          }
+        },
         showHistory: true,
         responses: [],
         responseIdx: 0,
@@ -80,6 +152,8 @@
           if (!message || this.loading) return;
           this.input = "";
           this.loading = true;
+          this.showLoader = true;
+          this.status = "";
 
           this.messages.push({ type: "user", content: message });
           this.history.push({ role: "user", content: message });
@@ -108,6 +182,7 @@
                 if (!line.startsWith("data: ")) continue;
                 const event = JSON.parse(line.slice(6));
                 if (event.type === "reasoning") {
+                  if (this.showLoader) this.status = "pensando";
                   if (reasoningIdx === null) {
                     this.messages.push({ type: "reasoning", content: "[thinking] " });
                     reasoningIdx = this.messages.length - 1;
@@ -115,6 +190,8 @@
                   this.messages[reasoningIdx].content += event.text;
                 } else if (event.type === "text") {
                   reasoningIdx = null;
+                  this.showLoader = false;
+                  this.status = "";
                   if (textIdx === null) {
                     this.messages.push({ type: "text", content: "" });
                     textIdx = this.messages.length - 1;
@@ -128,11 +205,15 @@
                     this.responses.splice(this.responses.length - 1, 1, responseText);
                   }
                 } else if (event.type === "tool_call") {
+                  if (this.showLoader) this.status = "ejecutando " + event.name;
                   textIdx = null; reasoningIdx = null;
                   this.messages.push({ type: "tool_call", content: "[tool] " + event.name + "(" + JSON.stringify(event.args) + ")" });
                 } else if (event.type === "tool_result") {
+                  if (this.showLoader) this.status = "respuesta de " + event.name + " recibida";
                   this.messages.push({ type: "tool_result", content: "[result] " + event.result });
                 } else if (event.type === "error") {
+                  this.showLoader = false;
+                  this.status = "";
                   textIdx = null; reasoningIdx = null;
                   this.messages.push({ type: "error", content: "[error] " + event.error });
                 }
@@ -142,6 +223,8 @@
             this.messages.push({ type: "error", content: err.message });
           }
           if (responseText) this.history.push({ role: "assistant", content: responseText });
+          this.showLoader = false;
+          this.status = "";
           this.loading = false;
         },
 
