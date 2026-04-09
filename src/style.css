@@ -262,6 +262,13 @@ table {
   margin: 0.4em 0;
 }
 
+.msg.text img {
+  display: block;
+  margin: 0.5em auto;
+  max-width: 100%;
+  height: auto;
+}
+
 .msg.text ul,
 .msg.text ol {
   margin: 0.4em 0 0.4em 1.5em;
